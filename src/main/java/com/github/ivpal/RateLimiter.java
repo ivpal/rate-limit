@@ -25,18 +25,6 @@ public class RateLimiter {
         this.rules = rules;
     }
 
-    public Future<Boolean> initialize() {
-        return vertx.executeBlocking(promise -> {
-            rules.forEach((path, rule) -> {
-                var cfg = new CacheConfiguration<String, Long>();
-                cfg.setName(path);
-                cfg.setExpiryPolicyFactory(CreatedExpiryPolicy.factoryOf(rule.getDuration()));
-                ignite.createCache(cfg);
-            });
-            promise.complete(true);
-        });
-    }
-
     public Future<Boolean> check(String path) {
         return vertx.executeBlocking(promise -> {
             var rule = rules.get(path);
@@ -65,28 +53,49 @@ public class RateLimiter {
         });
     }
 
-    public static class RateLimiterBuilder {
+    private Future<Boolean> initialize() {
+        return vertx.executeBlocking(promise -> {
+            rules.forEach((path, rule) -> {
+                var cfg = new CacheConfiguration<String, Long>();
+                cfg.setName(path);
+                cfg.setExpiryPolicyFactory(CreatedExpiryPolicy.factoryOf(rule.getDuration()));
+                ignite.createCache(cfg);
+            });
+            promise.complete(true);
+        });
+    }
+
+    public static class Builder {
         private Vertx vertx;
         private Ignite ignite;
         private final Map<String, RateLimitRule> rules = new HashMap<>();
 
-        public RateLimiterBuilder setVertx(Vertx vertx) {
+        public Builder setVertx(Vertx vertx) {
             this.vertx = vertx;
             return this;
         }
 
-        public RateLimiterBuilder setIgnite(Ignite ignite) {
+        public Builder setIgnite(Ignite ignite) {
             this.ignite = ignite;
             return this;
         }
 
-        public RateLimiterBuilder addRule(String path, RateLimitRule rule) {
+        public Builder addRule(String path, RateLimitRule rule) {
             rules.put(path, rule);
             return this;
         }
 
-        public RateLimiter build() {
-            return new RateLimiter(vertx, ignite, rules);
+        public Future<RateLimiter> build() {
+            if (vertx == null) {
+                throw new RuntimeException("You must set Vert.x instance via setVertx(...)");
+            }
+
+            if (ignite == null) {
+                throw new RuntimeException("You must set Ignite instance via setIgnite(...)");
+            }
+
+            var rateLimiter = new RateLimiter(vertx, ignite, rules);
+            return rateLimiter.initialize().map(result -> rateLimiter);
         }
     }
 }
