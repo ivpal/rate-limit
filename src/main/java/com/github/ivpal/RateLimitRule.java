@@ -3,20 +3,20 @@ package com.github.ivpal;
 import javax.cache.expiry.Duration;
 
 public class RateLimitRule {
-    private final long count;
+    private final long limit;
     private final Duration duration;
 
-    private RateLimitRule(long count, Duration duration) {
+    private RateLimitRule(long limit, Duration duration) {
         this.duration = duration;
-        this.count = count;
+        this.limit = limit;
     }
 
-    public static RateLimitRule of(long count, Duration duration) {
-        return new RateLimitRule(count, duration);
+    public static RateLimitRule of(long limit, Duration duration) {
+        return new RateLimitRule(limit, duration);
     }
 
-    public long getCount() {
-        return count;
+    public long getLimit() {
+        return limit;
     }
 
     public Duration getDuration() {

@@ -43,11 +43,15 @@ public class ServerVerticle extends AbstractVerticle {
         }
 
         rateLimiter.check(token).onSuccess(result -> {
-            if (result) {
+            ctx.response().putHeader("X-RateLimit-Remaining", Long.toString(result.getRemaining()));
+            ctx.response().putHeader("X-RateLimit-Limit", Long.toString(result.getLimit()));
+            if (result.isSuccess()) {
                 ctx.next();
             } else {
-                logger.warn("Limit for token: " + token);
-                ctx.response().setStatusCode(429).end();
+                logger.warn(String.format("Limit reached for: %s, %s", token, result));
+                ctx.response()
+                    .putHeader("X-RateLimit-Retry-After", Long.toString(result.getRetryAfter()))
+                    .setStatusCode(429).end();
             }
         });
     }

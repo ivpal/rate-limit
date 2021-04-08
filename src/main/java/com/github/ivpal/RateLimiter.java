@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.cache.expiry.CreatedExpiryPolicy;
+import java.util.concurrent.TimeUnit;
 
 public class RateLimiter {
     private final Logger logger = LoggerFactory.getLogger(RateLimiter.class);
@@ -23,27 +24,39 @@ public class RateLimiter {
         this.rule = rule;
     }
 
-    public Future<Boolean> check(String token) {
+    public Future<RateLimitResult> check(String token) {
         return vertx.executeBlocking(promise -> {
-            IgniteCache<String, Long> cache = ignite.getOrCreateCache(cacheName);
+            IgniteCache<String, CacheItem> cache = ignite.getOrCreateCache(cacheName);
             cache = cache.withExpiryPolicy(new CreatedExpiryPolicy(rule.getDuration()));
+            var result = new RateLimitResult();
+            result.setLimit(rule.getLimit());
+            result.setRemaining(0);
 
             var transactions = ignite.transactions();
             try (var tx = transactions.txStart()) {
-                var count = cache.get(token);
-                if (count == null) {
-                    count = 0L;
+                var item = cache.get(token);
+                if (item == null) {
+                    var duration = rule.getDuration();
+                    var durationInMillis = duration.getTimeUnit().toMillis(duration.getDurationAmount());
+                    item = new CacheItem(rule.getLimit(), 0L, System.currentTimeMillis() + durationInMillis);
                 }
 
-                if (count < rule.getCount() - 1) {
-                    cache.put(token, ++count);
+                if (item.getCount() < rule.getLimit() - 1) {
+                    item.increment();
+                    cache.put(token, item);
+                    result.setRemaining(rule.getLimit() - item.getCount());
                     tx.commit();
-                    promise.complete(true);
+                    result.setSuccess(true);
+                    promise.complete(result);
                     return;
+                } else {
+                    var seconds = TimeUnit.MILLISECONDS.toSeconds(item.getExpiredAfter() - System.currentTimeMillis());
+                    result.setRetryAfter(seconds);
                 }
             }
 
-            promise.complete(false);
+            result.setSuccess(false);
+            promise.complete(result);
         });
     }
 }
