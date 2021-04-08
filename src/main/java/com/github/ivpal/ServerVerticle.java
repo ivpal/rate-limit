@@ -19,8 +19,7 @@ public class ServerVerticle extends AbstractVerticle {
     @Override
     public void start(Promise<Void> startPromise) throws Exception {
         var router = Router.router(vertx);
-        router.get("/first").handler(this::handleFirst);
-        router.get("/second").handler(this::handleSecond);
+        router.get("/route").handler(this::handleRoute);
 
         var rateLimitRouter = Router.router(vertx);
         rateLimitRouter.get().handler(this::rateLimitingHandler);
@@ -37,22 +36,23 @@ public class ServerVerticle extends AbstractVerticle {
     }
 
     private void rateLimitingHandler(RoutingContext ctx) {
-        var path = ctx.request().path();
-        rateLimiter.check(path).onSuccess(result -> {
+        var token = ctx.request().headers().get("X-Auth-Token");
+        if (token == null) {
+            ctx.response().setStatusCode(401).end();
+            return;
+        }
+
+        rateLimiter.check(token).onSuccess(result -> {
             if (result) {
                 ctx.next();
             } else {
-                logger.warn("Limit: " + path);
+                logger.warn("Limit for token: " + token);
                 ctx.response().setStatusCode(429).end();
             }
         });
     }
 
-    private void handleFirst(RoutingContext ctx) {
-        ctx.response().end("first");
-    }
-
-    private void handleSecond(RoutingContext ctx) {
-        ctx.response().end("second");
+    private void handleRoute(RoutingContext ctx) {
+        ctx.response().end("OK");
     }
 }

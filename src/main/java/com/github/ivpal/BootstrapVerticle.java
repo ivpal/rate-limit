@@ -18,14 +18,9 @@ public class BootstrapVerticle extends AbstractVerticle {
     }
 
     @Override
-    public void start(Promise<Void> startPromise) throws Exception {
-        new RateLimiter.Builder()
-            .setVertx(vertx)
-            .setIgnite(ignite)
-            .addRule("/first", RateLimitRule.of(100, Duration.ONE_MINUTE))
-            .addRule("/second", RateLimitRule.of(100, Duration.FIVE_MINUTES))
-            .build()
-            .compose(rateLimiter -> vertx.deployVerticle(new ServerVerticle(rateLimiter)))
+    public void start(Promise<Void> startPromise) {
+        var rateLimiter = new RateLimiter(vertx, ignite, RateLimitRule.of(100, Duration.ONE_MINUTE));
+        vertx.deployVerticle(new ServerVerticle(rateLimiter))
             .onSuccess(id -> {
                 logger.info("Started");
                 startPromise.complete();
