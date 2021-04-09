@@ -41,7 +41,7 @@ public class RateLimiter {
                     item = new CacheItem(rule.getLimit(), 0L, System.currentTimeMillis() + durationInMillis);
                 }
 
-                if (item.getCount() < rule.getLimit() - 1) {
+                if (item.getCount() <= rule.getLimit() - 1) {
                     item.increment();
                     cache.put(token, item);
                     result.setRemaining(rule.getLimit() - item.getCount());
